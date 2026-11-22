@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kalender Kegiatan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: kalender bulanan di kiri, panel tanggal terpilih + kegiatan mendatang di kanan; menumpuk di layar sempit. */
+:root {
+  --bg: #EEF1F4;
+  --surface: #FFFFFF;
+  --soft: #F5F7F9;
+  --ink: #13202C;
+  --muted: #5A6A79;
+  --line: #DDE3E9;
+  --accent: #0E7C86;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DDF1F2;
+  --sun: #C23B3B;
+  --danger: #B42318;
+  --c-pribadi: #0E7C86;
+  --c-kerja: #2F66D0;
+  --c-belajar: #B86E08;
+  --c-sosial: #C2377A;
+  color-scheme: light;
+  --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E151B; --surface: #16202A; --soft: #1B2732; --ink: #E8EEF3; --muted: #93A3B2;
+    --line: #26333F; --accent: #3CC2CD; --accent-ink: #06242A; --accent-soft: #12363B;
+    --sun: #F08A8A; --danger: #F4908A;
+    --c-pribadi: #3CC2CD; --c-kerja: #7BA3F5; --c-belajar: #F0B040; --c-sosial: #F07FB5;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E151B; --surface: #16202A; --soft: #1B2732; --ink: #E8EEF3; --muted: #93A3B2;
+  --line: #26333F; --accent: #3CC2CD; --accent-ink: #06242A; --accent-soft: #12363B;
+  --sun: #F08A8A; --danger: #F4908A;
+  --c-pribadi: #3CC2CD; --c-kerja: #7BA3F5; --c-belajar: #F0B040; --c-sosial: #F07FB5;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-block: 24px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+.top h1 {
+  margin: 0; font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em;
+  font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.05; text-wrap: balance;
+}
+.top h1 .yr { color: var(--muted); font-weight: 600; }
+.kicker { margin: 0 0 6px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.nav { display: flex; gap: 8px; align-items: center; }
+.btn {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  height: 40px; padding: 0 14px; font-weight: 600; font-size: 0.9rem;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background .15s, border-color .15s;
+}
+.btn:hover { background: var(--soft); border-color: var(--muted); }
+.btn.icon { width: 40px; padding: 0; }
+.btn svg { width: 18px; height: 18px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
+
+/* Layout */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Calendar */
+.cal { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.dow { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+.dow span { padding: 10px 4px; text-align: center; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.dow span.sun { color: var(--sun); }
+.grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--line); }
+.cell {
+  background: var(--surface); border: 0; border-radius: 0; text-align: left;
+  min-height: 84px; padding: 4px 2px 6px; display: flex; flex-direction: column; gap: 4px; min-width: 0;
+  position: relative;
+}
+.cell:hover { background: var(--soft); }
+.cell.out { background: var(--soft); }
+.cell.out .num { color: var(--muted); opacity: .6; }
+.cell .num {
+  width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; font-weight: 600; font-size: 0.85rem; font-variant-numeric: tabular-nums;
+}
+.cell.sun .num { color: var(--sun); }
+.cell.today .num { background: var(--accent); color: var(--accent-ink); }
+.cell.sel { box-shadow: inset 0 0 0 2px var(--accent); z-index: 1; }
+.dots { display: none; }
+.chips { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chip {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  font-size: 0.62rem; font-weight: 500; line-height: 1.25; padding: 1px 2px; border-radius: 4px;
+  color: var(--ink); background: color-mix(in srgb, var(--cat) 16%, transparent);
+  border-left: 2px solid var(--cat); overflow: hidden; overflow-wrap: anywhere;
+}
+.chip .ct { display: none; }
+.more { font-size: 0.62rem; color: var(--muted); font-weight: 600; padding-left: 2px; }
+@media (min-width: 720px) {
+  .cell { min-height: 108px; padding: 6px 6px 8px; }
+  .chip {
+    display: block; font-size: 0.72rem; line-height: 1.35; padding: 2px 6px; border-radius: 6px;
+    border-left-width: 3px; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .chip .ct { display: inline; }
+  .more { font-size: 0.7rem; padding-left: 4px; }
+}
+
+/* Side cards */
+.side { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; min-width: 0; }
+.card h2 { margin: 0; font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
+.day-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.badge { font-size: 0.75rem; font-weight: 600; background: var(--accent-soft); color: var(--accent); padding: 3px 10px; border-radius: 999px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.evlist { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ev {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 10px; align-items: start;
+  padding: 10px 10px 10px 12px; border-radius: 12px; background: var(--soft); border-left: 4px solid var(--cat);
+}
+.ev-time { font-size: 0.8rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.ev-title { font-weight: 600; overflow-wrap: anywhere; }
+.tag { display: inline-block; margin-top: 2px; font-size: 0.7rem; font-weight: 600; color: var(--cat); }
+.ev-note { margin: 4px 0 0; font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; }
+.ev-actions { display: flex; gap: 2px; }
+.mini { background: transparent; border: 0; border-radius: 8px; padding: 4px 8px; font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+.mini:hover { background: var(--surface); color: var(--ink); }
+.mini.del:hover { color: var(--danger); }
+.empty { margin: 0 0 16px; padding: 18px 14px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: 0.9rem; text-align: center; }
+
+form { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 16px; }
+form .fh { margin: 0; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
+input, select, textarea {
+  width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; min-width: 0;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 0; }
+textarea { resize: vertical; min-height: 58px; }
+.row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.actions { display: flex; gap: 8px; }
+.actions .btn { flex: 1; }
+
+.gate form { border-top: 0; padding-top: 12px; }
+.gate .muted { margin-top: 6px; }
+
+/* Upcoming */
+.up { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.up button { width: 100%; text-align: left; background: transparent; border: 0; border-radius: 10px; padding: 8px 8px; display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 10px; align-items: center; }
+.up button:hover { background: var(--soft); }
+.up .d { font-size: 0.78rem; font-weight: 600; color: var(--muted); line-height: 1.25; font-variant-numeric: tabular-nums; }
+.up .d b { display: block; font-family: var(--font-display); font-size: 1.15rem; color: var(--ink); }
+.up .t { min-width: 0; }
+.up .t strong { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up .t span { font-size: 0.78rem; color: var(--cat); font-weight: 600; }
+.muted { color: var(--muted); font-size: 0.9rem; margin: 12px 0 0; }
+
+.status { margin: 0; font-size: 0.8rem; color: var(--muted); }
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--bg); border-radius: 12px; padding: 10px 14px;
+  display: flex; align-items: center; gap: 14px; font-size: 0.9rem; font-weight: 500; max-width: calc(100vw - 32px); z-index: 20;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+.toast button { background: transparent; border: 0; font-weight: 700; color: inherit; text-decoration: underline; padding: 0; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div>
+      <p class="kicker" id="todayLabel"></p>
+      <h1 id="monthLabel"></h1>
+    </div>
+    <div class="nav">
+      <button class="btn icon" id="prev" type="button" aria-label="Bulan sebelumnya">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <button class="btn" id="todayBtn" type="button">Hari ini</button>
+      <button class="btn icon" id="next" type="button" aria-label="Bulan berikutnya">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="cal" aria-label="Kalender bulanan">
+      <div class="dow" aria-hidden="true">
+        <span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span class="sun">Min</span>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <aside class="side">
+      <section class="card" aria-label="Kegiatan pada tanggal terpilih">
+        <div class="day-head">
+          <div>
+            <p class="kicker" id="dayWeekday"></p>
+            <h2 id="dayTitle"></h2>
+          </div>
+          <span class="badge" id="dayCount"></span>
+        </div>
+        <ul class="evlist" id="evlist"></ul>
+        <p class="empty" id="emptyDay" hidden>Belum ada kegiatan di tanggal ini. Tambahkan lewat formulir di bawah.</p>
+
+        <form id="form" autocomplete="off">
+          <p class="fh" id="formHead">Tambah kegiatan</p>
+          <div>
+            <label for="fTitle">Nama kegiatan</label>
+            <input id="fTitle" type="text" required maxlength="80" placeholder="Contoh: Rapat tim, Ujian akhir">
+          </div>
+          <div class="row">
+            <div>
+              <label for="fDate">Tanggal</label>
+              <input id="fDate" type="date" required>
+            </div>
+            <div>
+              <label for="fTime">Jam (opsional)</label>
+              <input id="fTime" type="time">
+            </div>
+          </div>
+          <div>
+            <label for="fCat">Kategori</label>
+            <select id="fCat">
+              <option value="pribadi">Pribadi</option>
+              <option value="kerja">Kerja</option>
+              <option value="belajar">Belajar</option>
+              <option value="sosial">Sosial</option>
+            </select>
+          </div>
+          <div>
+            <label for="fNote">Catatan (opsional)</label>
+            <textarea id="fNote" maxlength="300" placeholder="Lokasi, tautan, atau hal yang perlu dibawa"></textarea>
+          </div>
+          <div class="actions">
+            <button class="btn primary" id="fSubmit" type="submit">Tambah kegiatan</button>
+            <button class="btn" id="fCancel" type="button" hidden>Batal</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card" aria-label="Kegiatan mendatang">
+        <h2>Akan datang</h2>
+        <ul class="up" id="upcoming"></ul>
+        <p class="muted" id="upEmpty" hidden>Tidak ada kegiatan mendatang.</p>
+      </section>
+    </aside>
+  </main>
+
+  <p class="status" id="status">Memuat kegiatan…</p>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function () {
+  var CATS = {
+    pribadi: { label: 'Pribadi', v: '--c-pribadi' },
+    kerja:   { label: 'Kerja',   v: '--c-kerja' },
+    belajar: { label: 'Belajar', v: '--c-belajar' },
+    sosial:  { label: 'Sosial',  v: '--c-sosial' }
+  };
+  var LS_KEY = 'kalender-kegiatan-v1';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+  var keyOf = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  var parseKey = function (k) { var p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); };
+  var esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  var fmt = function (opts) { return new Intl.DateTimeFormat('id-ID', opts); };
+  var fMonth = fmt({ month: 'long' });
+  var fFull = fmt({ day: 'numeric', month: 'long', year: 'numeric' });
+  var fWeekday = fmt({ weekday: 'long' });
+  var fShort = fmt({ month: 'short' });
+  var fWdShort = fmt({ weekday: 'short' });
+
+  var now = new Date();
+  var todayKey = keyOf(now);
+  var view = { y: now.getFullYear(), m: now.getMonth() };
+  var selected = todayKey;
+  var events = [];
+  var editingId = null;
+  var toastTimer = null;
+
+  /* ---------- Penyimpanan (Supabase) ---------- */
+  // Isi dua baris ini dengan data dari proyek Supabase kamu (lihat PETUNJUK.md).
+  var SUPABASE_URL = 'https://oztxubgvjdcijyfaejrn.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_pqMOUjdMxJ_RE-0jNOobOA_KfLT6b3O';
+
+  var CONFIGURED = SUPABASE_URL.indexOf('https://') === 0 && SUPABASE_KEY.length > 20;
+  var POLL_MS = 10000;
+  var conn = 'loading'; // loading | ok | local | error
+  var lastSnap = '';
+  var busy = 0;
+
+  function newId() {
+    return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+  function loadLocal() {
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+  function persistLocal() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(events)); } catch (e) {}
+  }
+  async function rest(path, o) {
+    o = o || {};
+    var headers = Object.assign({ apikey: SUPABASE_KEY }, o.headers || {});
+    if (SUPABASE_KEY.indexOf('eyJ') === 0) headers.Authorization = 'Bearer ' + SUPABASE_KEY;
+    var res = await fetch(SUPABASE_URL.replace(/\/$/, '') + '/rest/v1/' + path, {
+      method: o.method || 'GET', headers: headers, body: o.body, cache: 'no-store'
+    });
+    var txt = await res.text();
+    var data = null;
+    try { data = txt ? JSON.parse(txt) : null; } catch (e) {}
+    if (!res.ok) throw new Error((data && data.message) || ('Server menjawab ' + res.status));
+    return data;
+  }
+  async function fetchAll() {
+    if (!CONFIGURED) return loadLocal();
+    var rows = await rest('events?select=id,title,event_date,event_time,cat,note&order=event_date.asc,event_time.asc');
+    return (rows || []).map(function (r) {
+      return { id: r.id, title: r.title, date: r.event_date, time: r.event_time, cat: r.cat, note: r.note };
+    });
+  }
+  function applyEvents(list) {
+    var snap = JSON.stringify(list);
+    if (snap === lastSnap) return false;
+    lastSnap = snap;
+    events = list.map(function (v) {
+      return { id: String(v.id), title: String(v.title || ''), date: String(v.date || ''), time: String(v.time || ''), cat: CATS[v.cat] ? v.cat : 'pribadi', note: String(v.note || '') };
+    });
+    return true;
+  }
+  async function refresh() {
+    if (busy) return;
+    try {
+      var list = await fetchAll();
+      conn = CONFIGURED ? 'ok' : 'local';
+      if (applyEvents(list)) renderAll(); else renderStatus();
+    } catch (err) {
+      conn = 'error';
+      renderStatus();
+    }
+  }
+  async function saveEvent(ev) {
+    busy++;
+    try {
+      if (CONFIGURED) {
+        await rest('events?on_conflict=id', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({
+            id: ev.id, title: ev.title, event_date: ev.date, event_time: ev.time || '',
+            cat: ev.cat, note: ev.note || '', updated_at: new Date().toISOString()
+          })
+        });
+      }
+      var i = events.findIndex(function (x) { return x.id === ev.id; });
+      if (i >= 0) events[i] = ev; else events.push(ev);
+      if (!CONFIGURED) persistLocal();
+      lastSnap = '';
+      renderAll();
+    } finally { busy--; }
+  }
+  async function removeEvent(id) {
+    busy++;
+    try {
+      if (CONFIGURED) {
+        await rest('events?id=eq.' + encodeURIComponent(id), { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+      }
+      events = events.filter(function (x) { return x.id !== id; });
+      if (!CONFIGURED) persistLocal();
+      lastSnap = '';
+      renderAll();
+    } finally { busy--; }
+  }
+
+  /* ---------- Helpers ---------- */
+  function byDate() {
+    var map = {};
+    events.forEach(function (e) { (map[e.date] = map[e.date] || []).push(e); });
+    Object.keys(map).forEach(function (k) { map[k].sort(cmp); });
+    return map;
+  }
+  function cmp(a, b) {
+    return (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')) || a.title.localeCompare(b.title);
+  }
+  function catVar(c) { return 'var(' + (CATS[c] || CATS.pribadi).v + ')'; }
+
+  /* ---------- Render ---------- */
+  function renderHeader() {
+    var d = new Date(view.y, view.m, 1);
+    var name = fMonth.format(d);
+    $('monthLabel').innerHTML = esc(name.charAt(0).toUpperCase() + name.slice(1)) + ' <span class="yr">' + view.y + '</span>';
+    $('todayLabel').textContent = 'Hari ini · ' + fWeekday.format(now) + ', ' + fFull.format(now);
+  }
+
+  function renderGrid() {
+    var map = byDate();
+    var first = new Date(view.y, view.m, 1);
+    var offset = (first.getDay() + 6) % 7;
+    var html = '';
+    for (var i = 0; i < 42; i++) {
+      var d = new Date(view.y, view.m, 1 - offset + i);
+      var k = keyOf(d);
+      var list = map[k] || [];
+      var cls = 'cell';
+      if (d.getMonth() !== view.m) cls += ' out';
+      if (d.getDay() === 0) cls += ' sun';
+      if (k === todayKey) cls += ' today';
+      if (k === selected) cls += ' sel';
+      var label = fFull.format(d) + (list.length ? ', ' + list.length + ' kegiatan' : ', tidak ada kegiatan');
+      var dots = list.slice(0, 4).map(function (e) { return '<i style="--cat:' + catVar(e.cat) + '"></i>'; }).join('');
+      var chips = list.slice(0, 2).map(function (e) {
+        return '<span class="chip" style="--cat:' + catVar(e.cat) + '">' + (e.time ? '<span class="ct">' + esc(e.time) + ' </span>' : '') + esc(e.title) + '</span>';
+      }).join('');
+      var more = list.length > 2 ? '<span class="more">+' + (list.length - 2) + ' lagi</span>' : '';
+      html += '<button type="button" class="' + cls + '" data-date="' + k + '" aria-label="' + esc(label) + '" aria-pressed="' + (k === selected) + '">' +
+        '<span class="num">' + d.getDate() + '</span>' +
+        '<span class="dots">' + dots + '</span>' +
+        '<span class="chips">' + chips + more + '</span></button>';
+    }
+    $('grid').innerHTML = html;
+  }
+
+  function renderDay() {
+    var d = parseKey(selected);
+    var wd = fWeekday.format(d);
+    $('dayWeekday').textContent = selected === todayKey ? wd + ' · hari ini' : wd;
+    $('dayTitle').textContent = fFull.format(d);
+    var list = (byDate()[selected] || []);
+    $('dayCount').textContent = list.length + ' kegiatan';
+    $('emptyDay').hidden = list.length > 0;
+    $('evlist').innerHTML = list.map(function (e) {
+      return '<li class="ev" style="--cat:' + catVar(e.cat) + '">' +
+        '<span class="ev-time">' + (e.time ? esc(e.time) : 'Seharian') + '</span>' +
+        '<div><div class="ev-title">' + esc(e.title) + '</div><span class="tag">' + esc((CATS[e.cat] || CATS.pribadi).label) + '</span>' +
+        (e.note ? '<p class="ev-note">' + esc(e.note) + '</p>' : '') + '</div>' +
+        '<div class="ev-actions"><button type="button" class="mini" data-edit="' + esc(e.id) + '">Ubah</button>' +
+        '<button type="button" class="mini del" data-del="' + esc(e.id) + '">Hapus</button></div></li>';
+    }).join('');
+  }
+
+  function renderUpcoming() {
+    var up = events.filter(function (e) { return e.date >= todayKey; }).sort(cmp).slice(0, 5);
+    $('upEmpty').hidden = up.length > 0;
+    $('upcoming').innerHTML = up.map(function (e) {
+      var d = parseKey(e.date);
+      return '<li><button type="button" data-jump="' + e.date + '" style="--cat:' + catVar(e.cat) + '">' +
+        '<span class="d"><b>' + d.getDate() + '</b>' + esc(fShort.format(d)) + '</span>' +
+        '<span class="t"><strong>' + esc(e.title) + '</strong><span>' + esc(fWdShort.format(d)) + (e.time ? ' · ' + esc(e.time) : '') + ' · ' + esc((CATS[e.cat] || CATS.pribadi).label) + '</span></span></button></li>';
+    }).join('');
+  }
+
+  function renderStatus() {
+    var s = $('status');
+    if (conn === 'ok') s.textContent = 'Terhubung. Kegiatan dibagikan ke semua yang membuka tautan ini dan diperbarui otomatis setiap 10 detik.';
+    else if (conn === 'local') s.textContent = 'Mode contoh: kegiatan hanya tersimpan di browser ini. Isi SUPABASE_URL dan SUPABASE_KEY di index.html agar terhubung dengan temanmu.';
+    else if (conn === 'error') s.textContent = 'Tidak bisa terhubung ke server. Mencoba lagi otomatis…';
+    else s.textContent = 'Memuat kegiatan…';
+  }
+
+  function renderAll() {
+    renderHeader();
+    renderGrid();
+    renderDay();
+    renderUpcoming();
+    renderStatus();
+  }
+
+  /* ---------- Form ---------- */
+  function resetForm() {
+    editingId = null;
+    $('fTitle').value = '';
+    $('fTime').value = '';
+    $('fNote').value = '';
+    $('fDate').value = selected;
+    $('formHead').textContent = 'Tambah kegiatan';
+    $('fSubmit').textContent = 'Tambah kegiatan';
+    $('fCancel').hidden = true;
+  }
+  function startEdit(id) {
+    var ev = events.find(function (x) { return x.id === id; });
+    if (!ev) return;
+    editingId = id;
+    $('fTitle').value = ev.title;
+    $('fDate').value = ev.date;
+    $('fTime').value = ev.time || '';
+    $('fCat').value = ev.cat;
+    $('fNote').value = ev.note || '';
+    $('formHead').textContent = 'Ubah kegiatan';
+    $('fSubmit').textContent = 'Simpan perubahan';
+    $('fCancel').hidden = false;
+    $('fTitle').focus();
+  }
+
+  function selectDate(k) {
+    selected = k;
+    var d = parseKey(k);
+    view = { y: d.getFullYear(), m: d.getMonth() };
+    resetForm();
+    renderAll();
+  }
+
+  /* ---------- Toast ---------- */
+  function toast(msg, undo) {
+    var t = $('toast');
+    t.innerHTML = '<span>' + esc(msg) + '</span>' + (undo ? '<button type="button" id="undoBtn">Urungkan</button>' : '');
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    if (undo) {
+      $('undoBtn').addEventListener('click', function () {
+        t.hidden = true;
+        undo();
+      });
+    }
+    toastTimer = setTimeout(function () { t.hidden = true; }, 9000);
+  }
+
+  /* ---------- Events ---------- */
+  $('prev').addEventListener('click', function () {
+    var d = new Date(view.y, view.m - 1, 1);
+    view = { y: d.getFullYear(), m: d.getMonth() };
+    renderAll();
+  });
+  $('next').addEventListener('click', function () {
+    var d = new Date(view.y, view.m + 1, 1);
+    view = { y: d.getFullYear(), m: d.getMonth() };
+    renderAll();
+  });
+  $('todayBtn').addEventListener('click', function () { selectDate(todayKey); });
+  $('grid').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-date]');
+    if (b) selectDate(b.getAttribute('data-date'));
+  });
+  $('upcoming').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-jump]');
+    if (b) selectDate(b.getAttribute('data-jump'));
+  });
+  $('evlist').addEventListener('click', async function (e) {
+    var ed = e.target.closest('[data-edit]');
+    var del = e.target.closest('[data-del]');
+    if (ed) { startEdit(ed.getAttribute('data-edit')); return; }
+    if (del) {
+      var id = del.getAttribute('data-del');
+      var ev = events.find(function (x) { return x.id === id; });
+      if (!ev) return;
+      try {
+        await removeEvent(id);
+        toast('Kegiatan dihapus', function () {
+          saveEvent(ev).catch(function () { toast('Gagal mengembalikan kegiatan'); });
+        });
+      } catch (err) { toast('Gagal menghapus: ' + (err && err.message ? err.message : 'coba lagi')); }
+    }
+  });
+  $('fCancel').addEventListener('click', resetForm);
+  $('form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var title = $('fTitle').value.trim();
+    var date = $('fDate').value;
+    if (!title || !date) return;
+    var ev = {
+      id: editingId || newId(),
+      title: title,
+      date: date,
+      time: $('fTime').value,
+      cat: $('fCat').value,
+      note: $('fNote').value.trim()
+    };
+    var wasEditing = !!editingId;
+    try {
+      await saveEvent(ev);
+      toast(wasEditing ? 'Perubahan disimpan' : 'Kegiatan ditambahkan');
+      selectDate(date);
+    } catch (err) {
+      toast('Gagal menyimpan: ' + (err && err.message ? err.message : 'coba lagi'));
+    }
+  });
+
+  /* ---------- Init ---------- */
+  function poll() {
+    if (CONFIGURED && document.visibilityState === 'visible') refresh();
+  }
+  document.addEventListener('visibilitychange', poll);
+  setInterval(poll, POLL_MS);
+
+  resetForm();
+  renderAll();
+  refresh();
+})();
+</script>
+</body>
+</html>
